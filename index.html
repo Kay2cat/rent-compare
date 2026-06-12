@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏠 合租找房比較器 — 室友一起選好房</title>
+  <meta name="description" content="多人合租找房比較工具：表格對比、地圖瀏覽、雷達圖分析、投票決策，串接 Google Sheets 即時同步。">
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="css/index.css">
+
+  <!-- Leaflet.js 地圖 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- Chart.js 圖表 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+
+  <!-- ===== Header ===== -->
+  <header class="app-header" id="app-header">
+    <div class="app-header__logo">
+      <span class="app-header__logo-icon">🏠</span>
+      <span>合租找房比較器</span>
+    </div>
+    <div class="app-header__voter" id="voter-badge">
+      <span class="app-header__voter-dot"></span>
+      <span id="voter-name">載入中...</span>
+    </div>
+  </header>
+
+  <!-- ===== 摘要卡片 ===== -->
+  <section class="summary-grid" id="summary-grid">
+    <div class="glass-card summary-card animate-in">
+      <div class="summary-card__value" id="stat-count">-</div>
+      <div class="summary-card__label">物件數量</div>
+    </div>
+    <div class="glass-card summary-card animate-in">
+      <div class="summary-card__value" id="stat-avg-rent">-</div>
+      <div class="summary-card__label">平均月租</div>
+    </div>
+    <div class="glass-card summary-card animate-in">
+      <div class="summary-card__value" id="stat-min-rent">-</div>
+      <div class="summary-card__label">最低月租</div>
+    </div>
+    <div class="glass-card summary-card animate-in">
+      <div class="summary-card__value" id="stat-vote-progress">-</div>
+      <div class="summary-card__label">投票進度</div>
+    </div>
+  </section>
+
+  <!-- ===== 標籤篩選列 ===== -->
+  <div class="tag-filter-bar" id="tag-filter-bar">
+    <span class="tag-filter-bar__label">🏷️ 篩選標籤：</span>
+    <!-- 動態產生標籤 -->
+  </div>
+
+  <!-- ===== 檢視切換 ===== -->
+  <nav class="view-tabs" id="view-tabs">
+    <button class="view-tab active" data-view="table" id="tab-table">
+      <span class="view-tab__icon">📋</span> 表格檢視
+    </button>
+    <button class="view-tab" data-view="map" id="tab-map">
+      <span class="view-tab__icon">🗺️</span> 地圖檢視
+    </button>
+    <button class="view-tab" data-view="chart" id="tab-chart">
+      <span class="view-tab__icon">📊</span> 比較檢視
+    </button>
+    <button class="view-tab" data-view="vote" id="tab-vote">
+      <span class="view-tab__icon">🗳️</span> 投票
+    </button>
+  </nav>
+
+  <!-- ===== 主內容區 ===== -->
+  <main class="main-content" id="main-content">
+
+    <!-- Loading 狀態 -->
+    <div class="loading-overlay" id="loading">
+      <div class="loading-spinner"></div>
+      <span class="loading-text">正在從 Google Sheets 載入資料...</span>
+    </div>
+
+    <!-- 空狀態 -->
+    <div class="empty-state" id="empty-state" style="display:none;">
+      <div class="empty-state__icon">📭</div>
+      <div class="empty-state__title">尚未新增任何物件</div>
+      <div class="empty-state__text">
+        請先在 Google Sheet 的「物件資料」工作表中，<br>
+        於 A 欄貼入租屋網址，或手動填寫物件資訊。
+      </div>
+    </div>
+
+    <!-- 表格檢視 -->
+    <div class="view-panel active" id="panel-table">
+      <div class="property-table-wrapper">
+        <table class="property-table" id="property-table">
+          <thead>
+            <tr>
+              <th data-sort="name">名稱 <span class="sort-icon">⇅</span></th>
+              <th data-sort="rent">月租金 <span class="sort-icon">⇅</span></th>
+              <th data-sort="perPerson">人均月費 <span class="sort-icon">⇅</span></th>
+              <th data-sort="size">坪數 <span class="sort-icon">⇅</span></th>
+              <th data-sort="layout">格局</th>
+              <th data-sort="floor">樓層</th>
+              <th>優缺點標籤</th>
+              <th data-sort="avgVote">投票 <span class="sort-icon">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- 動態產生 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 地圖檢視 -->
+    <div class="view-panel" id="panel-map">
+      <div class="map-container" id="map-container"></div>
+    </div>
+
+    <!-- 比較檢視（雷達圖） -->
+    <div class="view-panel" id="panel-chart">
+      <div class="chart-section">
+        <div class="glass-card chart-selector" id="chart-selector" style="padding: var(--space-lg);">
+          <div class="chart-selector__title">勾選物件比較（最多 3 個）</div>
+          <!-- 動態產生 -->
+        </div>
+        <div class="glass-card chart-canvas-wrapper" style="padding: var(--space-lg);">
+          <canvas id="radar-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 投票面板 -->
+    <div class="view-panel" id="panel-vote">
+      <div class="vote-section" id="vote-section">
+        <!-- 動態產生 -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===== 設定 Modal ===== -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal">
+      <div class="modal__title">⚙️ 設定</div>
+      <div class="modal__field">
+        <label for="input-script-url">Google Apps Script Web App 網址</label>
+        <input type="url" id="input-script-url" placeholder="https://script.google.com/macros/s/xxx/exec">
+      </div>
+      <div class="modal__field">
+        <label for="input-voter-name">你的暱稱</label>
+        <input type="text" id="input-voter-name" placeholder="例：小明">
+      </div>
+      <div class="modal__field">
+        <label for="input-roommate-count">合租人數</label>
+        <input type="number" id="input-roommate-count" value="3" min="1" max="10">
+      </div>
+      <div class="modal__field">
+        <label for="input-utility-estimate">預估每人水電網（月/元）</label>
+        <input type="number" id="input-utility-estimate" value="1500" min="0">
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" id="btn-cancel-settings">取消</button>
+        <button class="btn btn--primary" id="btn-save-settings">儲存設定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Toast ===== -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== JS Modules ===== -->
+  <script src="js/data-service.js"></script>
+  <script src="js/tag-system.js"></script>
+  <script src="js/cost-calc.js"></script>
+  <script src="js/table-view.js"></script>
+  <script src="js/map-view.js"></script>
+  <script src="js/chart-view.js"></script>
+  <script src="js/vote-panel.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
