@@ -128,6 +128,20 @@ const DataService = (() => {
   }
 
   /**
+   * 刪除物件
+   * @param {string} url - 物件網址
+   */
+  async function deleteProperty(url) {
+    const result = await _post({
+      action: 'deleteProperty',
+      url,
+    });
+    _cache.properties = null;
+    _cache.votes = null;
+    return result;
+  }
+
+  /**
    * 取得所有資料（一次性）
    */
   async function fetchAll() {
@@ -295,6 +309,7 @@ const DataService = (() => {
     submitVote,
     addProperty,
     updateStatus,
+    deleteProperty,
     fetchAll,
     clearCache,
     getDemoData,

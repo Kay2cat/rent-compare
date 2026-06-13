@@ -67,6 +67,25 @@ const TableView = (() => {
       const tdName = document.createElement('td');
       const nameEl = document.createElement('div');
       nameEl.className = 'property-name';
+      
+      const nameHeader = document.createElement('div');
+      nameHeader.style.display = 'flex';
+      nameHeader.style.alignItems = 'center';
+      nameHeader.style.gap = '6px';
+      
+      // 刪除按鈕
+      const btnDelete = document.createElement('button');
+      btnDelete.className = 'btn-delete';
+      btnDelete.innerHTML = '🗑️';
+      btnDelete.title = '刪除此物件';
+      btnDelete.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (confirm(`確定要刪除「${p.name || '此物件'}」嗎？\n這將會從試算表中移除該物件及所有人的投票資料！`)) {
+          App.deleteProperty(p.url, p.name);
+        }
+      });
+      nameHeader.appendChild(btnDelete);
+
       if (p.url) {
         const a = document.createElement('a');
         a.href = p.url;
@@ -74,10 +93,14 @@ const TableView = (() => {
         a.rel = 'noopener noreferrer';
         a.textContent = p.name || '未命名物件';
         a.title = p.address || '';
-        nameEl.appendChild(a);
+        nameHeader.appendChild(a);
       } else {
-        nameEl.textContent = p.name || '未命名物件';
+        const span = document.createElement('span');
+        span.textContent = p.name || '未命名物件';
+        nameHeader.appendChild(span);
       }
+      nameEl.appendChild(nameHeader);
+
       // 地址
       if (p.address) {
         const addr = document.createElement('div');

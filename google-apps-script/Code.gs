@@ -78,6 +78,9 @@ function doPost(e) {
     } else if (data.action === 'updateStatus') {
       const result = _updateStatus(data);
       return _jsonResponse(result);
+    } else if (data.action === 'deleteProperty') {
+      const result = _deleteProperty(data);
+      return _jsonResponse(result);
     }
 
     return _jsonResponse({ error: '未知的 action' });
@@ -219,6 +222,47 @@ function _updateStatus(data) {
     }
   }
   throw new Error('找不到對應的物件');
+}
+
+/**
+ * 刪除物件及相關的投票資料
+ * @param {Object} data - { url }
+ */
+function _deleteProperty(data) {
+  const sheetProps = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PROPERTIES);
+  if (!sheetProps) throw new Error('找不到「物件資料」工作表');
+
+  const { url } = data;
+  if (!url) throw new Error('缺少必要欄位：url');
+
+  let deletedName = '';
+  
+  // 1. 從「物件資料」中刪除該列
+  const rowsProps = sheetProps.getDataRange().getValues();
+  for (let i = rowsProps.length - 1; i >= 1; i--) {
+    if (rowsProps[i][0] === url) {
+      deletedName = rowsProps[i][1]; // 記下名稱以利刪除投票
+      sheetProps.deleteRow(i + 1);
+      break;
+    }
+  }
+
+  if (!deletedName) {
+    throw new Error('找不到對應的物件網址');
+  }
+
+  // 2. 從「投票」中刪除對應物件的所有投票
+  const sheetVotes = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_VOTES);
+  if (sheetVotes) {
+    const rowsVotes = sheetVotes.getDataRange().getValues();
+    for (let i = rowsVotes.length - 1; i >= 1; i--) {
+      if (rowsVotes[i][0] === deletedName) {
+        sheetVotes.deleteRow(i + 1);
+      }
+    }
+  }
+
+  return { success: true };
 }
 
 // ============================

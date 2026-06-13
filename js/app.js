@@ -361,6 +361,30 @@ const App = (() => {
   }
 
   /**
+   * 刪除物件（含 Demo 模式支援）
+   */
+  async function deleteProperty(url, name) {
+    if (_state.isDemo) {
+      _state.properties = _state.properties.filter(p => p.url !== url);
+      _state.votes = _state.votes.filter(v => v.propertyName !== name);
+      showToast('已刪除物件（Demo 模式）', 'success');
+      _updateUI();
+    } else {
+      _showLoading();
+      try {
+        const result = await DataService.deleteProperty(url);
+        if (result.error) throw new Error(result.error);
+        showToast('物件已成功刪除 🗑️', 'success');
+        await _fetchData();
+        _updateUI();
+      } catch (err) {
+        showToast(`刪除失敗：${err.message}`, 'error');
+        _hideLoading();
+      }
+    }
+  }
+
+  /**
    * 重新整理所有資料（投票後呼叫）
    */
   function refreshAll() {
@@ -378,6 +402,7 @@ const App = (() => {
     showToast,
     refreshAll,
     addDemoProperty,
+    deleteProperty,
   };
 })();
 

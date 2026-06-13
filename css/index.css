@@ -1504,3 +1504,21 @@ tr.row-signed {
     flex-basis: 45%;
   }
 }
+
+/* --- 刪除按鈕 --- */
+.btn-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px 0 0;
+  font-size: 0.95rem;
+  opacity: 0.3;
+  transition: opacity 0.2s, transform 0.2s;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.btn-delete:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
