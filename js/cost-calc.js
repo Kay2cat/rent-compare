@@ -3,18 +3,16 @@
  */
 const CostCalc = (() => {
   let _roommateCount = 3;
-  let _utilityEstimate = 1500; // 每人預估水電網（元/月）
 
   /**
    * 設定參數
    */
-  function setConfig(roommateCount, utilityEstimate) {
+  function setConfig(roommateCount) {
     _roommateCount = roommateCount || 3;
-    _utilityEstimate = utilityEstimate || 1500;
   }
 
   /**
-   * 計算單一物件的人均月費
+   * 計算單一物件的人均月租
    * @param {Object} property
    * @returns {number}
    */
@@ -24,40 +22,18 @@ const CostCalc = (() => {
   }
 
   /**
-   * 計算單一物件的人均月總支出
-   * @param {Object} property
-   * @returns {number}
-   */
-  function perPersonTotal(property) {
-    let utility = _utilityEstimate;
-
-    // 如果含水電，扣除部分預估
-    const utils = (property.utilities || '').toLowerCase();
-    if (utils.includes('含') && (utils.includes('水') || utils.includes('電'))) {
-      if (utils.includes('水') && utils.includes('電')) {
-        utility = Math.round(utility * 0.3); // 只剩網路
-      } else {
-        utility = Math.round(utility * 0.65); // 部分含
-      }
-    }
-
-    return perPersonRent(property) + utility;
-  }
-
-  /**
-   * 計算年度總成本
+   * 計算年度總成本（12 個月租金 + 押金分攤）
    * @param {Object} property
    * @returns {number}
    */
   function annualCost(property) {
-    const monthly = perPersonTotal(property);
     let depositMonths = 2;
     const d = (property.deposit || '').trim();
     if (d.includes('一')) depositMonths = 1;
     if (d.includes('三')) depositMonths = 3;
 
     const depositAmount = perPersonRent(property) * depositMonths;
-    return monthly * 12 + depositAmount;
+    return perPersonRent(property) * 12 + depositAmount;
   }
 
   /**
@@ -69,7 +45,7 @@ const CostCalc = (() => {
     const enriched = properties.map(p => ({
       ...p,
       _perPerson: perPersonRent(p),
-      _perPersonTotal: perPersonTotal(p),
+      _perPersonTotal: perPersonRent(p), // 取消水電預估後，人均月費即人均租金
       _annualCost: annualCost(p),
     }));
 
@@ -78,7 +54,7 @@ const CostCalc = (() => {
     sorted.forEach((p, i) => { p._costRank = i + 1; });
 
     // 最大值（用於成本條比例）
-    const maxTotal = Math.max(...enriched.map(p => p._perPersonTotal));
+    const maxTotal = Math.max(...enriched.map(p => p._perPersonTotal), 0);
     enriched.forEach(p => {
       p._costRatio = maxTotal > 0 ? (p._perPersonTotal / maxTotal) : 0;
     });
@@ -125,7 +101,6 @@ const CostCalc = (() => {
   return {
     setConfig,
     perPersonRent,
-    perPersonTotal,
     annualCost,
     enrichAll,
     formatMoney,

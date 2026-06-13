@@ -1,5 +1,5 @@
 /**
- * 投票面板模組 — 1-5 分制投票
+ * 投票面板模組 — 1-5 分制投票 + 留言
  */
 const VotePanel = (() => {
   let _properties = [];
@@ -36,6 +36,11 @@ const VotePanel = (() => {
       const card = document.createElement('div');
       card.className = 'glass-card vote-card animate-in';
       card.style.animationDelay = `${idx * 0.06}s`;
+      if (p.huntStatus === '淘汰') card.classList.add('vote-card--eliminated');
+
+      // === 上半部：物件資訊 + 投票操作 ===
+      const topRow = document.createElement('div');
+      topRow.className = 'vote-card__top';
 
       // 物件資訊
       const info = document.createElement('div');
@@ -60,35 +65,37 @@ const VotePanel = (() => {
       allTags.forEach(t => tagsRow.appendChild(TagSystem.renderTag(t, false)));
       info.appendChild(tagsRow);
 
-      card.appendChild(info);
+      topRow.appendChild(info);
 
       // 投票操作區
       const actions = document.createElement('div');
       actions.className = 'vote-card__actions';
 
-      // 投票星星
       const myVote = _getMyVote(p.name);
-      const starsContainer = _renderStars(p.name, myVote, idx);
+      const starsContainer = _renderStars(p, myVote, idx);
       actions.appendChild(starsContainer);
 
-      // 投票摘要
       const summary = _renderSummary(p.name);
       actions.appendChild(summary);
 
-      card.appendChild(actions);
+      topRow.appendChild(actions);
+      card.appendChild(topRow);
+
+      // === 下半部：留言串 ===
+      const comments = _renderComments(p.name);
+      if (comments) card.appendChild(comments);
+
       container.appendChild(card);
     });
   }
 
   /**
-   * 渲染星星
+   * 渲染星星 + 留言輸入 + 送出按鈕
    */
-  function _renderStars(propertyName, currentScore, idx) {
+  function _renderStars(property, currentScore, idx) {
+    const propertyName = property.name;
     const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.flexDirection = 'column';
-    wrapper.style.alignItems = 'center';
-    wrapper.style.gap = '8px';
+    wrapper.className = 'vote-input-area';
 
     const stars = document.createElement('div');
     stars.className = 'vote-stars';
@@ -114,6 +121,15 @@ const VotePanel = (() => {
 
     wrapper.appendChild(stars);
 
+    // 留言輸入框（帶入自己之前的留言）
+    const myComment = _getMyComment(propertyName);
+    const commentInput = document.createElement('textarea');
+    commentInput.className = 'vote-comment-input';
+    commentInput.rows = 2;
+    commentInput.placeholder = '留下你的意見（選填），例：採光超棒但廁所偏舊';
+    commentInput.value = myComment || '';
+    wrapper.appendChild(commentInput);
+
     // 提交按鈕
     const btn = document.createElement('button');
     btn.className = 'vote-submit-btn';
@@ -128,6 +144,7 @@ const VotePanel = (() => {
       }
 
       const score = parseInt(selected.value);
+      const comment = commentInput.value.trim();
       btn.disabled = true;
       btn.textContent = '送出中...';
 
@@ -139,13 +156,9 @@ const VotePanel = (() => {
           );
           if (existing >= 0) {
             _votes[existing].score = score;
+            _votes[existing].comment = comment;
           } else {
-            _votes.push({
-              propertyName,
-              voterName: _voterName,
-              score,
-              comment: '',
-            });
+            _votes.push({ propertyName, voterName: _voterName, score, comment });
           }
           App.showToast(`已投 ${score} 分 ⭐`, 'success');
           App.refreshAll();
@@ -154,7 +167,7 @@ const VotePanel = (() => {
             propertyName,
             voterName: _voterName,
             score,
-            comment: '',
+            comment,
           });
           App.showToast(`已投 ${score} 分 ⭐`, 'success');
           App.refreshAll();
@@ -210,9 +223,59 @@ const VotePanel = (() => {
     return summary;
   }
 
+  /**
+   * 渲染留言串（所有人的留言）
+   */
+  function _renderComments(propertyName) {
+    const pv = _votes.filter(v => v.propertyName === propertyName && (v.comment || '').trim());
+    if (pv.length === 0) return null;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'vote-comments';
+
+    const title = document.createElement('div');
+    title.className = 'vote-comments__title';
+    title.textContent = `💬 室友意見（${pv.length}）`;
+    wrapper.appendChild(title);
+
+    pv.forEach(v => {
+      const item = document.createElement('div');
+      item.className = 'vote-comment-item';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'vote-comment-item__avatar';
+      avatar.textContent = (v.voterName || '?').charAt(0);
+
+      const body = document.createElement('div');
+      body.className = 'vote-comment-item__body';
+
+      const meta = document.createElement('div');
+      meta.className = 'vote-comment-item__meta';
+      const stars = v.score ? ` · ${'★'.repeat(Math.round(parseFloat(v.score)))}` : '';
+      meta.textContent = `${v.voterName}${stars}`;
+
+      const text = document.createElement('div');
+      text.className = 'vote-comment-item__text';
+      text.textContent = v.comment;
+
+      body.appendChild(meta);
+      body.appendChild(text);
+      item.appendChild(avatar);
+      item.appendChild(body);
+      wrapper.appendChild(item);
+    });
+
+    return wrapper;
+  }
+
   function _getMyVote(propertyName) {
     const v = _votes.find(v => v.propertyName === propertyName && v.voterName === _voterName);
     return v ? parseInt(v.score) : null;
+  }
+
+  function _getMyComment(propertyName) {
+    const v = _votes.find(v => v.propertyName === propertyName && v.voterName === _voterName);
+    return v ? (v.comment || '') : '';
   }
 
   return { setConfig, render };

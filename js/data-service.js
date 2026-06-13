@@ -100,6 +100,34 @@ const DataService = (() => {
   }
 
   /**
+   * 新增/更新物件（快速新增 Modal 使用）
+   * @param {Object} property - { url, name, address, rent, size, layout, floor, deposit, utilities }
+   */
+  async function addProperty(property) {
+    const result = await _post({
+      action: 'addProperty',
+      ...property,
+    });
+    _cache.properties = null;
+    return result;
+  }
+
+  /**
+   * 更新看房狀態
+   * @param {string} url - 物件網址（唯一鍵）
+   * @param {string} status - 候選/已約看/已看/淘汰/簽約
+   */
+  async function updateStatus(url, status) {
+    const result = await _post({
+      action: 'updateStatus',
+      url,
+      status,
+    });
+    _cache.properties = null;
+    return result;
+  }
+
+  /**
    * 取得所有資料（一次性）
    */
   async function fetchAll() {
@@ -138,7 +166,8 @@ const DataService = (() => {
           notes: '房東人很好，可議價',
           lat: 25.0330,
           lng: 121.5654,
-          status: '✅'
+          status: '✅',
+          huntStatus: '已約看'
         },
         {
           url: 'https://rent.591.com.tw/home/456',
@@ -156,7 +185,8 @@ const DataService = (() => {
           notes: '可養小型寵物',
           lat: 25.0260,
           lng: 121.5436,
-          status: '✅'
+          status: '✅',
+          huntStatus: '已看'
         },
         {
           url: 'https://www.hbhousing.com.tw/rent/789',
@@ -174,7 +204,8 @@ const DataService = (() => {
           notes: '附近有全聯、7-11',
           lat: 25.0600,
           lng: 121.5440,
-          status: '✅'
+          status: '✅',
+          huntStatus: '候選'
         },
         {
           url: 'https://rent.591.com.tw/home/321',
@@ -192,7 +223,8 @@ const DataService = (() => {
           notes: '有景觀，可看到101',
           lat: 25.0510,
           lng: 121.5770,
-          status: '✅'
+          status: '✅',
+          huntStatus: '淘汰'
         },
         {
           url: 'https://www.sinyi.com.tw/rent/654',
@@ -210,7 +242,8 @@ const DataService = (() => {
           notes: '離學校近，適合通勤',
           lat: 24.9980,
           lng: 121.5340,
-          status: '✅'
+          status: '✅',
+          huntStatus: '候選'
         }
       ],
       votes: [
@@ -223,6 +256,10 @@ const DataService = (() => {
         { propertyName: '文山區平價三房 近萬隆站', voterName: '小明', score: 4, comment: 'CP值高' },
         { propertyName: '文山區平價三房 近萬隆站', voterName: '小華', score: 5, comment: '便宜！' },
         { propertyName: '文山區平價三房 近萬隆站', voterName: '小美', score: 3, comment: '太遠了' },
+      ],
+      destinations: [
+        { name: '小明公司', address: '台北市中正區北平西路3號', lat: 25.0478, lng: 121.5170 },
+        { name: '小華學校', address: '台北市大安區羅斯福路四段1號', lat: 25.0173, lng: 121.5398 },
       ],
       tagDefs: [
         { name: '近捷運', category: '交通', color: '#10b981', emoji: '🚇' },
@@ -256,6 +293,8 @@ const DataService = (() => {
     getTagDefinitions,
     getVotes,
     submitVote,
+    addProperty,
+    updateStatus,
     fetchAll,
     clearCache,
     getDemoData,

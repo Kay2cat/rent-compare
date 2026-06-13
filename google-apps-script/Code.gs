@@ -19,6 +19,7 @@
 const SHEET_PROPERTIES = '物件資料';
 const SHEET_VOTES = '投票';
 const SHEET_TAGS = '標籤定義';
+const SHEET_DEST = '通勤目的地'; // 選用：室友的公司/學校位置
 
 // ============================
 // 1. API 端點
@@ -43,12 +44,16 @@ function doGet(e) {
     case 'getTagDefs':
       result = { tagDefs: _getTagDefs() };
       break;
+    case 'getDestinations':
+      result = { destinations: _getDestinations() };
+      break;
     case 'getAll':
     default:
       result = {
         properties: _getProperties(),
         votes: _getVotes(),
         tagDefs: _getTagDefs(),
+        destinations: _getDestinations(),
       };
   }
 
@@ -69,6 +74,9 @@ function doPost(e) {
       return _jsonResponse(result);
     } else if (data.action === 'addProperty') {
       const result = _addProperty(data);
+      return _jsonResponse(result);
+    } else if (data.action === 'updateStatus') {
+      const result = _updateStatus(data);
       return _jsonResponse(result);
     }
 
@@ -110,6 +118,7 @@ function _getProperties() {
     lat: row[13] || '',       // N 欄：緯度
     lng: row[14] || '',       // O 欄：經度
     status: row[15] || '',    // P 欄：抓取狀態
+    huntStatus: row[16] || '', // Q 欄：看房狀態（候選/已約看/已看/淘汰/簽約）
   }));
 }
 
@@ -148,6 +157,68 @@ function _getTagDefs() {
     color: row[2] || '',
     emoji: row[3] || '',
   }));
+}
+
+/**
+ * 讀取通勤目的地（室友的公司/學校）
+ * 工作表「通勤目的地」欄位：A 名稱 / B 地址 / C 緯度 / D 經度
+ * 若有地址但缺經緯度，會自動 geocode 並寫回
+ */
+function _getDestinations() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_DEST);
+  if (!sheet) return []; // 沒建這張表也不影響其他功能
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  const results = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+
+    let lat = row[2];
+    let lng = row[3];
+
+    // 自動補經緯度
+    if (row[1] && (!lat || !lng)) {
+      const coords = _geocode(row[1].toString());
+      if (coords) {
+        lat = coords.lat;
+        lng = coords.lng;
+        sheet.getRange(i + 1, 3).setValue(lat);
+        sheet.getRange(i + 1, 4).setValue(lng);
+      }
+    }
+
+    results.push({
+      name: row[0] || '',
+      address: row[1] || '',
+      lat: lat || '',
+      lng: lng || '',
+    });
+  }
+  return results;
+}
+
+/**
+ * 更新看房狀態（Q 欄）— 以網址為唯一鍵
+ * @param {Object} data - { url, status }
+ */
+function _updateStatus(data) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PROPERTIES);
+  if (!sheet) throw new Error('找不到「物件資料」工作表');
+
+  const { url, status } = data;
+  if (!url) throw new Error('缺少必要欄位：url');
+
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === url) {
+      sheet.getRange(i + 1, 17).setValue(status || ''); // Q 欄
+      return { success: true };
+    }
+  }
+  throw new Error('找不到對應的物件');
 }
 
 // ============================
@@ -200,7 +271,7 @@ function _addProperty(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PROPERTIES);
   if (!sheet) throw new Error('找不到「物件資料」工作表');
 
-  const { url, name, address, rent, size, layout, floor, images } = data;
+  const { url, name, address, rent, size, layout, floor, images, deposit, utilities, notes, pros } = data;
   if (!url) throw new Error('缺少必要欄位：url');
 
   const rows = sheet.getDataRange().getValues();
@@ -209,13 +280,17 @@ function _addProperty(data) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === url) {
       // 已存在，則更新已有欄位
-      if (name)    sheet.getRange(i + 1, 2).setValue(name);
-      if (address) sheet.getRange(i + 1, 3).setValue(address);
-      if (rent)    sheet.getRange(i + 1, 4).setValue(rent);
-      if (size)    sheet.getRange(i + 1, 5).setValue(size);
-      if (layout)  sheet.getRange(i + 1, 6).setValue(layout);
-      if (floor)   sheet.getRange(i + 1, 7).setValue(floor);
-      if (images)  sheet.getRange(i + 1, 12).setValue(images); // L 欄：圖片
+      if (name)      sheet.getRange(i + 1, 2).setValue(name);
+      if (address)   sheet.getRange(i + 1, 3).setValue(address);
+      if (rent)      sheet.getRange(i + 1, 4).setValue(rent);
+      if (size)      sheet.getRange(i + 1, 5).setValue(size);
+      if (layout)    sheet.getRange(i + 1, 6).setValue(layout);
+      if (floor)     sheet.getRange(i + 1, 7).setValue(floor);
+      if (deposit)   sheet.getRange(i + 1, 8).setValue(deposit);   // H 欄：押金
+      if (utilities) sheet.getRange(i + 1, 9).setValue(utilities); // I 欄：含水電網
+      if (pros)      sheet.getRange(i + 1, 11).setValue(pros);     // K 欄：優缺點標籤
+      if (images)    sheet.getRange(i + 1, 12).setValue(images);   // L 欄：圖片
+      if (notes)     sheet.getRange(i + 1, 13).setValue(notes);    // M 欄：備註
       
       // 如果有更新地址且原本經緯度為空，重新進行地理編碼
       if (address && (!rows[i][13] || !rows[i][14])) { // N 欄和 O 欄 (index 13, 14)
@@ -254,15 +329,16 @@ function _addProperty(data) {
     size || 0,            // E: 坪數
     layout || '',         // F: 格局
     floor || '',          // G: 樓層
-    '兩個月',             // H: 押金
-    '不含',               // I: 含水電網
+    deposit || '兩個月',  // H: 押金
+    utilities || '不含',  // I: 含水電網
     formulaJ,             // J: 人均月費
-    '',                   // K: 優缺點標籤
+    pros || '',           // K: 優缺點標籤
     images || '',         // L: 圖片
-    '',                   // M: 備註
+    notes || '',          // M: 備註
     lat,                  // N: 緯度
     lng,                  // O: 經度
-    '✅ 已同步'           // P: 抓取狀態
+    '✅ 已同步',          // P: 抓取狀態
+    '候選'                // Q: 看房狀態
   ]);
 
   return { success: true, action: 'created' };

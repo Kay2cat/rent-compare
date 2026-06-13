@@ -7,10 +7,11 @@ const App = (() => {
     properties: [],  // enriched properties
     votes: [],
     tagDefs: [],
+    destinations: [],
     voterName: '',
     scriptUrl: '',
     roommateCount: 3,
-    utilityEstimate: 1500,
+    hideEliminated: false,
     isDemo: true,
     currentView: 'table',
   };
@@ -22,6 +23,7 @@ const App = (() => {
     _loadSettings();
     _parseUrlParams();
     _bindEvents();
+    QuickAdd.bindEvents();
 
     // 如果沒有設定 Script URL，進入 Demo 模式
     if (!_state.scriptUrl) {
@@ -60,7 +62,7 @@ const App = (() => {
     _state.voterName = localStorage.getItem('rc_voterName') || '';
     _state.scriptUrl = localStorage.getItem('rc_scriptUrl') || '';
     _state.roommateCount = parseInt(localStorage.getItem('rc_roommateCount')) || 3;
-    _state.utilityEstimate = parseInt(localStorage.getItem('rc_utilityEstimate')) || 1500;
+    _state.hideEliminated = localStorage.getItem('rc_hideEliminated') === '1';
   }
 
   /**
@@ -70,7 +72,19 @@ const App = (() => {
     localStorage.setItem('rc_voterName', _state.voterName);
     localStorage.setItem('rc_scriptUrl', _state.scriptUrl);
     localStorage.setItem('rc_roommateCount', _state.roommateCount);
-    localStorage.setItem('rc_utilityEstimate', _state.utilityEstimate);
+    localStorage.setItem('rc_hideEliminated', _state.hideEliminated ? '1' : '0');
+  }
+
+  /**
+   * 設定各模組的共用組態
+   */
+  function _configModules() {
+    CostCalc.setConfig(_state.roommateCount);
+    TagSystem.init(_state.tagDefs, _onFilterChange);
+    VotePanel.setConfig(_state.voterName, _state.roommateCount, _state.isDemo);
+    TableView.setConfig(_state.isDemo);
+    QuickAdd.setConfig(_state.isDemo);
+    Commute.setDestinations(_state.destinations);
   }
 
   /**
@@ -80,12 +94,10 @@ const App = (() => {
     const demo = DataService.getDemoData();
     _state.tagDefs = demo.tagDefs;
     _state.votes = demo.votes;
+    _state.destinations = demo.destinations || [];
     _state.voterName = _state.voterName || '小明';
 
-    // 初始化模組
-    CostCalc.setConfig(_state.roommateCount, _state.utilityEstimate);
-    TagSystem.init(_state.tagDefs, _onFilterChange);
-    VotePanel.setConfig(_state.voterName, _state.roommateCount, true);
+    _configModules();
 
     // enriched
     _state.properties = CostCalc.enrichAll(demo.properties);
@@ -102,10 +114,9 @@ const App = (() => {
       const data = await DataService.fetchAll();
       _state.tagDefs = data.tagDefs;
       _state.votes = data.votes;
+      _state.destinations = data.destinations || [];
 
-      CostCalc.setConfig(_state.roommateCount, _state.utilityEstimate);
-      TagSystem.init(_state.tagDefs, _onFilterChange);
-      VotePanel.setConfig(_state.voterName, _state.roommateCount, false);
+      _configModules();
 
       _state.properties = CostCalc.enrichAll(data.properties);
       _hideLoading();
@@ -138,6 +149,10 @@ const App = (() => {
     const filterBar = document.getElementById('tag-filter-bar');
     TagSystem.renderFilterBar(filterBar, _state.properties);
 
+    // 隱藏已淘汰 toggle 狀態
+    const toggle = document.getElementById('toggle-hide-eliminated');
+    if (toggle) toggle.checked = _state.hideEliminated;
+
     // 渲染目前的檢視
     _renderCurrentView();
   }
@@ -147,27 +162,30 @@ const App = (() => {
    */
   function _updateSummary() {
     const props = _state.properties;
+    const activeProps = props.filter(p => p.huntStatus !== '淘汰');
     const votes = _state.votes;
 
-    // 物件數
-    document.getElementById('stat-count').textContent = props.length;
+    // 物件數（顯示 有效/全部）
+    const countEl = document.getElementById('stat-count');
+    countEl.textContent = activeProps.length < props.length
+      ? `${activeProps.length}/${props.length}`
+      : props.length;
 
-    // 平均月租
-    if (props.length > 0) {
-      const avgRent = props.reduce((s, p) => s + (parseFloat(p.rent) || 0), 0) / props.length;
+    // 平均月租（只算未淘汰）
+    const base = activeProps.length > 0 ? activeProps : props;
+    if (base.length > 0) {
+      const avgRent = base.reduce((s, p) => s + (parseFloat(p.rent) || 0), 0) / base.length;
       document.getElementById('stat-avg-rent').textContent = `$${CostCalc.formatMoney(avgRent)}`;
-    }
 
-    // 最低月租
-    if (props.length > 0) {
-      const minRent = Math.min(...props.map(p => parseFloat(p.rent) || Infinity));
+      const minRent = Math.min(...base.map(p => parseFloat(p.rent) || Infinity));
       document.getElementById('stat-min-rent').textContent = `$${CostCalc.formatMoney(minRent)}`;
     }
 
-    // 投票進度
-    const totalVotable = props.length * _state.roommateCount;
-    const totalVoted = votes.length;
-    const pct = totalVotable > 0 ? Math.round(totalVoted / totalVotable * 100) : 0;
+    // 投票進度（淘汰物件不計入分母）
+    const votableNames = new Set(activeProps.map(p => p.name));
+    const totalVotable = activeProps.length * _state.roommateCount;
+    const totalVoted = votes.filter(v => votableNames.has(v.propertyName)).length;
+    const pct = totalVotable > 0 ? Math.min(100, Math.round(totalVoted / totalVotable * 100)) : 0;
     document.getElementById('stat-vote-progress').textContent = `${pct}%`;
   }
 
@@ -175,10 +193,15 @@ const App = (() => {
    * 渲染目前的檢視
    */
   function _renderCurrentView() {
-    const filtered = TagSystem.filterProperties(
+    let filtered = TagSystem.filterProperties(
       _state.properties,
       TagSystem.getActiveFilters()
     );
+
+    // 隱藏已淘汰
+    if (_state.hideEliminated) {
+      filtered = filtered.filter(p => p.huntStatus !== '淘汰');
+    }
 
     // 空狀態
     const emptyEl = document.getElementById('empty-state');
@@ -236,12 +259,21 @@ const App = (() => {
     // Header 點擊 → 開設定
     document.getElementById('voter-badge').addEventListener('click', _showSettings);
 
+    // 隱藏已淘汰 toggle
+    const toggle = document.getElementById('toggle-hide-eliminated');
+    if (toggle) {
+      toggle.addEventListener('change', () => {
+        _state.hideEliminated = toggle.checked;
+        _saveSettings();
+        _renderCurrentView();
+      });
+    }
+
     // 設定 Modal
     document.getElementById('btn-save-settings').addEventListener('click', () => {
       _state.scriptUrl = document.getElementById('input-script-url').value.trim();
       _state.voterName = document.getElementById('input-voter-name').value.trim() || '使用者';
       _state.roommateCount = parseInt(document.getElementById('input-roommate-count').value) || 3;
-      _state.utilityEstimate = parseInt(document.getElementById('input-utility-estimate').value) || 1500;
 
       _saveSettings();
       _hideSettings();
@@ -253,8 +285,7 @@ const App = (() => {
         _fetchData().then(_updateUI);
       } else {
         _state.isDemo = true;
-        CostCalc.setConfig(_state.roommateCount, _state.utilityEstimate);
-        VotePanel.setConfig(_state.voterName, _state.roommateCount, true);
+        _configModules();
         _state.properties = CostCalc.enrichAll(_state.properties.map(p => {
           const { _perPerson, _perPersonTotal, _annualCost, _costRank, _costRatio, ...raw } = p;
           return raw;
@@ -271,7 +302,10 @@ const App = (() => {
 
     // 鍵盤 ESC 關閉 Modal
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') _hideSettings();
+      if (e.key === 'Escape') {
+        _hideSettings();
+        QuickAdd.close();
+      }
     });
   }
 
@@ -279,7 +313,6 @@ const App = (() => {
     document.getElementById('input-script-url').value = _state.scriptUrl;
     document.getElementById('input-voter-name').value = _state.voterName;
     document.getElementById('input-roommate-count').value = _state.roommateCount;
-    document.getElementById('input-utility-estimate').value = _state.utilityEstimate;
     document.getElementById('settings-modal').classList.add('open');
   }
 
@@ -311,6 +344,23 @@ const App = (() => {
   }
 
   /**
+   * Demo 模式下新增物件（快速新增 Modal 使用）
+   */
+  function addDemoProperty(payload) {
+    const raw = _state.properties.map(p => {
+      const { _perPerson, _perPersonTotal, _annualCost, _costRank, _costRatio, ...rest } = p;
+      return rest;
+    });
+    raw.push({
+      ...payload,
+      pros: '', cons: '', images: '', notes: '',
+      lat: '', lng: '', status: 'Demo', huntStatus: '候選',
+    });
+    _state.properties = CostCalc.enrichAll(raw);
+    _updateUI();
+  }
+
+  /**
    * 重新整理所有資料（投票後呼叫）
    */
   function refreshAll() {
@@ -327,6 +377,7 @@ const App = (() => {
     init,
     showToast,
     refreshAll,
+    addDemoProperty,
   };
 })();
 

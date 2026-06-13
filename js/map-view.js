@@ -55,9 +55,24 @@ const MapView = (() => {
 
     const validProperties = properties.filter(p => p.lat && p.lng);
 
-    if (validProperties.length === 0) return;
-
     const bounds = L.latLngBounds([]);
+
+    // 通勤目的地標記（室友的公司/學校）
+    Commute.getDestinations().forEach(d => {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="dest-marker">🎯<span class="dest-marker__label">${d.name}</span></div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+      const marker = L.marker([parseFloat(d.lat), parseFloat(d.lng)], { icon })
+        .addTo(_map)
+        .bindPopup(`<b>🎯 ${d.name}</b><br>${d.address || ''}`);
+      bounds.extend([parseFloat(d.lat), parseFloat(d.lng)]);
+      _markers.push(marker);
+    });
+
+    if (validProperties.length === 0 && _markers.length === 0) return;
 
     validProperties.forEach(p => {
       const avg = _getAvgVote(p.name, votes);
@@ -123,6 +138,14 @@ const MapView = (() => {
     const priceStr = CostCalc.formatMoney(property.rent);
     const ppStr = CostCalc.formatMoney(property._perPersonTotal || property._perPerson || 0);
     const voteStr = avg !== null ? `⭐ ${avg.toFixed(1)}` : '尚未投票';
+    const statusStr = property.huntStatus && property.huntStatus !== '候選'
+      ? `<span style="font-size:0.75rem;padding:1px 8px;border-radius:999px;background:rgba(0,0,0,0.06);margin-left:6px;">${property.huntStatus}</span>` : '';
+
+    // 通勤距離
+    const ds = Commute.distancesFor(property);
+    const commuteHtml = ds && ds.length > 0
+      ? `<div style="font-size:0.8rem;color:#4a7c72;margin-top:4px;">${ds.map(d => `🎯 ${d.name} ${d.km.toFixed(1)}km`).join(' · ')}</div>`
+      : '';
 
     // 標籤 HTML
     const allTags = [...TagSystem.parseTags(property.pros), ...TagSystem.parseTags(property.cons)];
@@ -137,10 +160,11 @@ const MapView = (() => {
 
     return `
       <div class="map-popup">
-        <div class="map-popup__title">${property.name || '未命名'}</div>
+        <div class="map-popup__title">${property.name || '未命名'}${statusStr}</div>
         <div class="map-popup__price">$${priceStr}/月 · $${ppStr}/人</div>
         <div class="map-popup__address">${property.address || ''}</div>
         <div style="margin-top:4px;font-size:0.85rem;">${voteStr}</div>
+        ${commuteHtml}
         ${property.layout ? `<div style="font-size:0.8rem;color:#888;margin-top:2px;">${property.layout} · ${property.size || '?'}坪 · ${property.floor || ''}</div>` : ''}
         ${tagsHtml ? `<div class="map-popup__tags">${tagsHtml}</div>` : ''}
         ${property.url ? `<a href="${property.url}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:0.8rem;color:#a5b4fc;">🔗 查看原始頁面</a>` : ''}
