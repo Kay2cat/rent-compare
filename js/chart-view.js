@@ -167,6 +167,7 @@ const ChartView = (() => {
     _properties.forEach((p, i) => {
       const item = document.createElement('label');
       item.className = 'chart-selector__item';
+      item.title = p.name; // 滑過顯示完整名稱
 
       const checked = _selected.has(p.name);
       const disabled = !checked && _selected.size >= MAX_SELECT;
@@ -188,8 +189,8 @@ const ChartView = (() => {
       });
 
       const label = document.createElement('span');
-      label.style.fontSize = '0.85rem';
-      label.style.color = checked ? 'var(--text-primary)' : 'var(--text-secondary)';
+      label.className = 'chart-selector__name';
+      if (checked) label.classList.add('is-checked');
       label.textContent = `${p.name}`;
 
       // 色塊
