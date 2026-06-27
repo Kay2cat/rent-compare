@@ -315,7 +315,9 @@ function _addProperty(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PROPERTIES);
   if (!sheet) throw new Error('找不到「物件資料」工作表');
 
-  const { url, name, address, rent, size, layout, floor, images, deposit, utilities, notes, pros } = data;
+  const { url, name, address, rent, size, layout, floor, images, deposit, utilities, notes } = data;
+  // features（591 其他特色）與 pros（優缺點標籤）都寫入 K 欄，兩者合併
+  const pros = [data.pros, data.features].filter(Boolean).join('、');
   if (!url) throw new Error('缺少必要欄位：url');
 
   const rows = sheet.getDataRange().getValues();
@@ -332,7 +334,11 @@ function _addProperty(data) {
       if (floor)     sheet.getRange(i + 1, 7).setValue(floor);
       if (deposit)   sheet.getRange(i + 1, 8).setValue(deposit);   // H 欄：押金
       if (utilities) sheet.getRange(i + 1, 9).setValue(utilities); // I 欄：含水電網
-      if (pros)      sheet.getRange(i + 1, 11).setValue(pros);     // K 欄：優缺點標籤
+      if (pros) {
+        // K 欄：與既有標籤做聯集合併，不覆蓋手動加的標籤
+        const merged = _mergeTags(rows[i][10], pros);
+        sheet.getRange(i + 1, 11).setValue(merged);
+      }
       if (images)    sheet.getRange(i + 1, 12).setValue(images);   // L 欄：圖片
       if (notes)     sheet.getRange(i + 1, 13).setValue(notes);    // M 欄：備註
       
@@ -688,6 +694,18 @@ function _geocode(address) {
 // ============================
 // 輔助函式
 // ============================
+
+/**
+ * 合併兩組逗號/頓號分隔的標籤，去除重複（保留先後順序）
+ */
+function _mergeTags(existing, incoming) {
+  const split = s => (s || '').toString().split(/[,，、]/).map(t => t.trim()).filter(Boolean);
+  const seen = [];
+  [...split(existing), ...split(incoming)].forEach(t => {
+    if (!seen.includes(t)) seen.push(t);
+  });
+  return seen.join('、');
+}
 
 function _jsonResponse(data) {
   return ContentService

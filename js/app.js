@@ -223,9 +223,6 @@ const App = (() => {
       case 'chart':
         ChartView.render(filtered, _state.votes);
         break;
-      case 'vote':
-        VotePanel.render(filtered, _state.votes);
-        break;
     }
   }
 

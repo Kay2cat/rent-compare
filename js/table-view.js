@@ -1,5 +1,6 @@
 /**
- * 表格檢視模組 — 渲染物件比較表格，支援排序、看房狀態、通勤距離
+ * 表格檢視模組 — 渲染物件比較表格
+ * 支援：排序、看房狀態、通勤距離、刪除、點列展開（投票 + 留言）
  */
 const TableView = (() => {
   let _properties = [];
@@ -7,6 +8,7 @@ const TableView = (() => {
   let _sortKey = null;
   let _sortDir = 'asc';
   let _isDemo = false;
+  let _expandedName = null; // 目前展開的物件名稱（一次只展開一個）
 
   // 看房狀態選項
   const HUNT_STATUSES = [
@@ -22,6 +24,14 @@ const TableView = (() => {
   }
 
   /**
+   * 計算目前表格的欄位數（給展開列 colspan 用）
+   */
+  function _columnCount() {
+    // 展開鈕 + 名稱 + 狀態 + 租金 + 人均 + 坪數 + 格局 + 樓層 + [通勤] + 標籤 + 投票
+    return Commute.hasDestinations() ? 11 : 10;
+  }
+
+  /**
    * 渲染表格
    * @param {Array} properties - enriched properties
    * @param {Array} votes - 投票陣列
@@ -29,6 +39,7 @@ const TableView = (() => {
   function render(properties, votes) {
     _properties = properties;
     _votes = votes;
+    VotePanel.setVotes(votes);
 
     // 沒有通勤目的地時隱藏通勤欄
     const thCommute = document.getElementById('th-commute');
@@ -58,21 +69,31 @@ const TableView = (() => {
 
     sorted.forEach((p, i) => {
       const tr = document.createElement('tr');
-      tr.className = 'animate-in';
+      tr.className = 'property-row animate-in';
       tr.style.animationDelay = `${i * 0.04}s`;
       if (p.huntStatus === '淘汰') tr.classList.add('row-eliminated');
       if (p.huntStatus === '簽約') tr.classList.add('row-signed');
+      if (_expandedName === p.name) tr.classList.add('row-expanded');
 
-      // 名稱
+      // === 展開指示欄 ===
+      const tdToggle = document.createElement('td');
+      tdToggle.className = 'col-toggle';
+      const chevron = document.createElement('span');
+      chevron.className = 'row-chevron';
+      chevron.textContent = '▸';
+      tdToggle.appendChild(chevron);
+      tr.appendChild(tdToggle);
+
+      // === 名稱 ===
       const tdName = document.createElement('td');
       const nameEl = document.createElement('div');
       nameEl.className = 'property-name';
-      
+
       const nameHeader = document.createElement('div');
       nameHeader.style.display = 'flex';
       nameHeader.style.alignItems = 'center';
       nameHeader.style.gap = '6px';
-      
+
       // 刪除按鈕
       const btnDelete = document.createElement('button');
       btnDelete.className = 'btn-delete';
@@ -80,6 +101,7 @@ const TableView = (() => {
       btnDelete.title = '刪除此物件';
       btnDelete.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (confirm(`確定要刪除「${p.name || '此物件'}」嗎？\n這將會從試算表中移除該物件及所有人的投票資料！`)) {
           App.deleteProperty(p.url, p.name);
         }
@@ -93,6 +115,7 @@ const TableView = (() => {
         a.rel = 'noopener noreferrer';
         a.textContent = p.name || '未命名物件';
         a.title = p.address || '';
+        a.addEventListener('click', (e) => e.stopPropagation()); // 點連結不要觸發展開
         nameHeader.appendChild(a);
       } else {
         const span = document.createElement('span');
@@ -113,12 +136,12 @@ const TableView = (() => {
       tdName.appendChild(nameEl);
       tr.appendChild(tdName);
 
-      // 看房狀態
+      // === 看房狀態 ===
       const tdStatus = document.createElement('td');
       tdStatus.appendChild(_renderStatusSelect(p));
       tr.appendChild(tdStatus);
 
-      // 月租金
+      // === 月租金 ===
       const tdRent = document.createElement('td');
       const rentEl = document.createElement('span');
       rentEl.className = 'property-price';
@@ -126,82 +149,148 @@ const TableView = (() => {
       tdRent.appendChild(rentEl);
       tr.appendChild(tdRent);
 
-      // 人均月費（含成本條）
+      // === 人均月費 ===
       const tdPP = document.createElement('td');
       tdPP.appendChild(CostCalc.renderCostBar(p));
       tr.appendChild(tdPP);
 
-      // 坪數
+      // === 坪數 ===
       const tdSize = document.createElement('td');
       tdSize.textContent = p.size ? `${p.size} 坪` : '-';
       tr.appendChild(tdSize);
 
-      // 格局
+      // === 格局 ===
       const tdLayout = document.createElement('td');
       tdLayout.textContent = p.layout || '-';
       tr.appendChild(tdLayout);
 
-      // 樓層
+      // === 樓層 ===
       const tdFloor = document.createElement('td');
       tdFloor.textContent = p.floor || '-';
       tr.appendChild(tdFloor);
 
-      // 通勤距離（有設定目的地才顯示）
+      // === 通勤距離 ===
       if (Commute.hasDestinations()) {
         const tdCommute = document.createElement('td');
         tdCommute.appendChild(Commute.renderCell(p));
         tr.appendChild(tdCommute);
       }
 
-      // 優缺點標籤
+      // === 優缺點標籤 ===
       const tdTags = document.createElement('td');
       const tagsContainer = document.createElement('div');
       tagsContainer.className = 'property-tags';
-
       const allTags = [...TagSystem.parseTags(p.pros), ...TagSystem.parseTags(p.cons)];
-      allTags.forEach(t => {
-        tagsContainer.appendChild(TagSystem.renderTag(t, false));
-      });
-
+      allTags.forEach(t => tagsContainer.appendChild(TagSystem.renderTag(t, false)));
       tdTags.appendChild(tagsContainer);
       tr.appendChild(tdTags);
 
-      // 投票平均 + 留言數
+      // === 投票摘要（精簡）+ 留言數 ===
       const tdVote = document.createElement('td');
-      const avg = _getAvgVote(p.name);
-      if (avg !== null) {
-        const avgEl = document.createElement('span');
-        avgEl.style.fontWeight = '700';
-        avgEl.style.fontSize = '1rem';
-        const starColor = avg >= 4 ? 'var(--success)' : avg >= 3 ? 'var(--warning)' : 'var(--danger)';
-        avgEl.style.color = starColor;
-        avgEl.textContent = `⭐ ${avg.toFixed(1)}`;
-        tdVote.appendChild(avgEl);
-      } else {
-        tdVote.textContent = '-';
-        tdVote.style.color = 'var(--text-muted)';
-      }
-      // 留言數
-      const commentCount = _votes.filter(v => v.propertyName === p.name && (v.comment || '').trim()).length;
-      if (commentCount > 0) {
-        const cEl = document.createElement('div');
-        cEl.style.fontSize = '0.75rem';
-        cEl.style.color = 'var(--text-muted)';
-        cEl.style.marginTop = '2px';
-        cEl.textContent = `💬 ${commentCount} 則意見`;
-        cEl.title = _votes
-          .filter(v => v.propertyName === p.name && (v.comment || '').trim())
-          .map(v => `${v.voterName}：${v.comment}`)
-          .join('\n');
-        tdVote.appendChild(cEl);
-      }
+      tdVote.className = 'col-vote';
+      tdVote.appendChild(VotePanel.renderSummaryInline(p.name));
+
+      const cCount = VotePanel.commentCount(p.name);
+      const hint = document.createElement('div');
+      hint.className = 'vote-cell-hint';
+      hint.textContent = cCount > 0 ? `💬 ${cCount} · 點此投票` : '點此投票/留言';
+      tdVote.appendChild(hint);
       tr.appendChild(tdVote);
 
+      // === 點列展開 ===
+      tr.addEventListener('click', () => _toggleExpand(p, tr));
+
       tbody.appendChild(tr);
+
+      // 若此列為展開狀態，補上展開列
+      if (_expandedName === p.name) {
+        tbody.appendChild(_buildExpandRow(p));
+      }
     });
 
     // 綁定排序事件
     _bindSortHeaders();
+  }
+
+  /**
+   * 切換展開
+   */
+  function _toggleExpand(property, tr) {
+    if (_expandedName === property.name) {
+      _expandedName = null;
+    } else {
+      _expandedName = property.name;
+    }
+    // 重新渲染（簡單可靠，資料量不大）
+    render(_properties, _votes);
+
+    // 展開後捲動到該列
+    if (_expandedName === property.name) {
+      setTimeout(() => {
+        const expanded = document.querySelector('.row-expanded');
+        if (expanded && expanded.scrollIntoView) expanded.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 50);
+    }
+  }
+
+  /**
+   * 建立展開列（投票 + 留言）
+   */
+  function _buildExpandRow(property) {
+    const tr = document.createElement('tr');
+    tr.className = 'expand-row';
+
+    const td = document.createElement('td');
+    td.colSpan = _columnCount();
+
+    const panel = document.createElement('div');
+    panel.className = 'expand-panel animate-in';
+
+    // 圖片（若有）
+    if (property.images) {
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'expand-panel__media';
+      const img = document.createElement('img');
+      img.src = property.images;
+      img.alt = property.name || '';
+      img.loading = 'lazy';
+      img.onerror = () => { imgWrap.style.display = 'none'; };
+      imgWrap.appendChild(img);
+      panel.appendChild(imgWrap);
+    }
+
+    // 主體：資訊 + 投票區
+    const main = document.createElement('div');
+    main.className = 'expand-panel__main';
+
+    // 摘要資訊列（備註等）
+    if (property.notes) {
+      const notes = document.createElement('div');
+      notes.className = 'expand-panel__notes';
+      notes.textContent = `📝 ${property.notes}`;
+      main.appendChild(notes);
+    }
+
+    // 完整標籤
+    const allTags = [...TagSystem.parseTags(property.pros), ...TagSystem.parseTags(property.cons)];
+    if (allTags.length > 0) {
+      const tagsRow = document.createElement('div');
+      tagsRow.className = 'property-tags expand-panel__tags';
+      allTags.forEach(t => tagsRow.appendChild(TagSystem.renderTag(t, false)));
+      main.appendChild(tagsRow);
+    }
+
+    // 投票 + 留言區塊
+    main.appendChild(VotePanel.renderVoteBlock(property));
+
+    panel.appendChild(main);
+    td.appendChild(panel);
+    tr.appendChild(td);
+
+    // 展開區內部點擊不要冒泡觸發收合
+    tr.addEventListener('click', (e) => e.stopPropagation());
+
+    return tr;
   }
 
   /**
@@ -220,6 +309,9 @@ const TableView = (() => {
       if (s.value === current) opt.selected = true;
       select.appendChild(opt);
     });
+
+    // 避免點下拉選單觸發整列展開
+    select.addEventListener('click', (e) => e.stopPropagation());
 
     select.addEventListener('change', async () => {
       const newStatus = select.value;

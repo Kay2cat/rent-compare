@@ -1522,3 +1522,177 @@ tr.row-signed {
   opacity: 1;
   transform: scale(1.2);
 }
+
+/* ======================================================
+   v3 — 表格展開列（投票 + 留言整併進首頁）
+   ====================================================== */
+
+/* 展開指示欄 */
+.col-toggle {
+  width: 28px;
+  text-align: center;
+  padding-left: var(--space-sm) !important;
+  padding-right: 0 !important;
+}
+
+.row-chevron {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  transition: transform var(--transition-base), color var(--transition-base);
+}
+
+.property-row {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.property-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.property-row.row-expanded {
+  background: var(--accent-glow);
+}
+
+.property-row.row-expanded .row-chevron {
+  transform: rotate(90deg);
+  color: var(--accent-start);
+}
+
+/* 投票欄位的提示文字 */
+.col-vote {
+  white-space: nowrap;
+}
+
+.vote-cell-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.property-row:hover .vote-cell-hint {
+  color: var(--accent-start);
+}
+
+.vote-summary--inline {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.vote-summary__none {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* 展開列容器 */
+.expand-row > td {
+  padding: 0 !important;
+  background: rgba(74, 124, 114, 0.04);
+  border-bottom: 2px solid var(--border-glass);
+}
+
+.expand-panel {
+  display: flex;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  align-items: flex-start;
+}
+
+.expand-panel__media {
+  flex: 0 0 220px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.expand-panel__media img {
+  width: 100%;
+  height: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  display: block;
+}
+
+.expand-panel__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.expand-panel__notes {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+}
+
+.expand-panel__tags {
+  margin: 0;
+}
+
+/* 投票區塊（展開列內）：左投票、右留言 */
+.vote-block {
+  display: flex;
+  gap: var(--space-xl);
+  flex-wrap: wrap;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+.vote-block__heading {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.vote-block .vote-input-area {
+  flex: 0 0 240px;
+  align-items: stretch;
+}
+
+.vote-block .vote-comments {
+  flex: 1;
+  min-width: 220px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.vote-comments__empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: var(--space-sm) 0;
+}
+
+/* 展開列 RWD */
+@media (max-width: 768px) {
+  .expand-panel {
+    flex-direction: column;
+  }
+
+  .expand-panel__media {
+    flex: none;
+    width: 100%;
+  }
+
+  .vote-block {
+    flex-direction: column;
+    gap: var(--space-lg);
+  }
+
+  .vote-block .vote-input-area {
+    flex: none;
+  }
+
+  .col-toggle {
+    width: 22px;
+  }
+}

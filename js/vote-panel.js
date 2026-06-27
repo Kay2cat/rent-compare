@@ -1,16 +1,16 @@
 /**
- * 投票面板模組 — 1-5 分制投票 + 留言
+ * 投票模組 — 1-5 分制投票 + 留言
+ * 主要對外介面：
+ *   - setConfig(voterName, roommateCount, isDemo)
+ *   - renderVoteBlock(property)  → 回傳含星星/留言框/留言串的 DOM 區塊（供表格展開列使用）
+ *   - renderSummaryInline(propertyName) → 回傳精簡的平均分+投票者圓點（供表格欄位使用）
  */
 const VotePanel = (() => {
-  let _properties = [];
   let _votes = [];
   let _voterName = '';
   let _roommateCount = 3;
   let _isDemo = false;
 
-  /**
-   * 設定
-   */
   function setConfig(voterName, roommateCount, isDemo) {
     _voterName = voterName;
     _roommateCount = roommateCount;
@@ -18,89 +18,53 @@ const VotePanel = (() => {
   }
 
   /**
-   * 渲染投票面板
-   * @param {Array} properties
-   * @param {Array} votes
+   * 提供最新的投票資料（表格渲染前呼叫）
    */
-  function render(properties, votes) {
-    _properties = properties;
-    _votes = votes;
+  function setVotes(votes) {
+    _votes = votes || [];
+  }
 
-    const container = document.getElementById('vote-section');
-    if (!container) return;
-    container.innerHTML = '';
+  /**
+   * 渲染完整投票區塊（星星 + 留言輸入 + 留言串）
+   * 給表格展開列使用
+   * @param {Object} property - enriched property
+   * @returns {HTMLElement}
+   */
+  function renderVoteBlock(property) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'vote-block';
 
-    if (properties.length === 0) return;
+    // 左：投票輸入
+    const inputArea = _renderInput(property);
+    wrapper.appendChild(inputArea);
 
-    properties.forEach((p, idx) => {
-      const card = document.createElement('div');
-      card.className = 'glass-card vote-card animate-in';
-      card.style.animationDelay = `${idx * 0.06}s`;
-      if (p.huntStatus === '淘汰') card.classList.add('vote-card--eliminated');
+    // 右：留言串
+    const thread = _renderComments(property.name);
+    wrapper.appendChild(thread);
 
-      // === 上半部：物件資訊 + 投票操作 ===
-      const topRow = document.createElement('div');
-      topRow.className = 'vote-card__top';
-
-      // 物件資訊
-      const info = document.createElement('div');
-      info.className = 'vote-card__info';
-
-      const name = document.createElement('div');
-      name.className = 'vote-card__name';
-      name.textContent = p.name || '未命名物件';
-
-      const price = document.createElement('div');
-      price.className = 'vote-card__price';
-      price.textContent = `$${CostCalc.formatMoney(p.rent)}/月 · $${CostCalc.formatMoney(p._perPerson || 0)}/人`;
-
-      info.appendChild(name);
-      info.appendChild(price);
-
-      // 標籤摘要（簡要）
-      const tagsRow = document.createElement('div');
-      tagsRow.className = 'property-tags';
-      tagsRow.style.marginTop = '8px';
-      const allTags = [...TagSystem.parseTags(p.pros), ...TagSystem.parseTags(p.cons)].slice(0, 4);
-      allTags.forEach(t => tagsRow.appendChild(TagSystem.renderTag(t, false)));
-      info.appendChild(tagsRow);
-
-      topRow.appendChild(info);
-
-      // 投票操作區
-      const actions = document.createElement('div');
-      actions.className = 'vote-card__actions';
-
-      const myVote = _getMyVote(p.name);
-      const starsContainer = _renderStars(p, myVote, idx);
-      actions.appendChild(starsContainer);
-
-      const summary = _renderSummary(p.name);
-      actions.appendChild(summary);
-
-      topRow.appendChild(actions);
-      card.appendChild(topRow);
-
-      // === 下半部：留言串 ===
-      const comments = _renderComments(p.name);
-      if (comments) card.appendChild(comments);
-
-      container.appendChild(card);
-    });
+    return wrapper;
   }
 
   /**
    * 渲染星星 + 留言輸入 + 送出按鈕
    */
-  function _renderStars(property, currentScore, idx) {
+  function _renderInput(property) {
     const propertyName = property.name;
+    const currentScore = _getMyVote(propertyName);
+
     const wrapper = document.createElement('div');
     wrapper.className = 'vote-input-area';
+
+    const heading = document.createElement('div');
+    heading.className = 'vote-block__heading';
+    heading.textContent = `${_voterName} 的評分`;
+    wrapper.appendChild(heading);
 
     const stars = document.createElement('div');
     stars.className = 'vote-stars';
 
-    const groupName = `vote-${idx}`;
+    // group 名稱用物件名稱雜湊，避免多列衝突
+    const groupName = `vote-${_hash(propertyName)}`;
 
     for (let i = 5; i >= 1; i--) {
       const radio = document.createElement('input');
@@ -118,10 +82,9 @@ const VotePanel = (() => {
       stars.appendChild(radio);
       stars.appendChild(label);
     }
-
     wrapper.appendChild(stars);
 
-    // 留言輸入框（帶入自己之前的留言）
+    // 留言輸入框
     const myComment = _getMyComment(propertyName);
     const commentInput = document.createElement('textarea');
     commentInput.className = 'vote-comment-input';
@@ -134,23 +97,23 @@ const VotePanel = (() => {
     const btn = document.createElement('button');
     btn.className = 'vote-submit-btn';
     btn.textContent = currentScore ? '更新投票' : '送出投票';
-    btn.id = `vote-btn-${idx}`;
 
     btn.addEventListener('click', async () => {
       const selected = stars.querySelector(`input[name="${groupName}"]:checked`);
-      if (!selected) {
+      const comment = commentInput.value.trim();
+
+      // 允許只留言不評分？這裡要求至少有分數，但若已有舊分數則沿用
+      let score = selected ? parseInt(selected.value) : currentScore;
+      if (!score) {
         App.showToast('請先選擇分數 ⭐', 'error');
         return;
       }
 
-      const score = parseInt(selected.value);
-      const comment = commentInput.value.trim();
       btn.disabled = true;
       btn.textContent = '送出中...';
 
       try {
         if (_isDemo) {
-          // Demo 模式：直接更新本地資料
           const existing = _votes.findIndex(
             v => v.propertyName === propertyName && v.voterName === _voterName
           );
@@ -163,12 +126,7 @@ const VotePanel = (() => {
           App.showToast(`已投 ${score} 分 ⭐`, 'success');
           App.refreshAll();
         } else {
-          await DataService.submitVote({
-            propertyName,
-            voterName: _voterName,
-            score,
-            comment,
-          });
+          await DataService.submitVote({ propertyName, voterName: _voterName, score, comment });
           App.showToast(`已投 ${score} 分 ⭐`, 'success');
           App.refreshAll();
         }
@@ -185,58 +143,26 @@ const VotePanel = (() => {
   }
 
   /**
-   * 渲染投票摘要
-   */
-  function _renderSummary(propertyName) {
-    const pv = _votes.filter(v => v.propertyName === propertyName);
-    const summary = document.createElement('div');
-    summary.className = 'vote-summary';
-
-    // 平均分
-    if (pv.length > 0) {
-      const avg = pv.reduce((s, v) => s + (parseFloat(v.score) || 0), 0) / pv.length;
-      const avgEl = document.createElement('div');
-      avgEl.className = 'vote-summary__avg';
-      avgEl.textContent = avg.toFixed(1);
-      summary.appendChild(avgEl);
-    }
-
-    // 投票者圓點
-    const dots = document.createElement('div');
-    dots.className = 'vote-summary__voters';
-
-    // 收集所有已知投票者
-    const allVoters = new Set();
-    _votes.forEach(v => allVoters.add(v.voterName));
-    if (_voterName) allVoters.add(_voterName);
-
-    allVoters.forEach(name => {
-      const vote = pv.find(v => v.voterName === name);
-      const dot = document.createElement('div');
-      dot.className = `vote-summary__voter-dot ${vote ? 'vote-summary__voter-dot--voted' : 'vote-summary__voter-dot--pending'}`;
-      dot.textContent = name.charAt(0);
-      dot.title = vote ? `${name}：${vote.score} 分` : `${name}：尚未投票`;
-      dots.appendChild(dot);
-    });
-
-    summary.appendChild(dots);
-    return summary;
-  }
-
-  /**
    * 渲染留言串（所有人的留言）
    */
   function _renderComments(propertyName) {
-    const pv = _votes.filter(v => v.propertyName === propertyName && (v.comment || '').trim());
-    if (pv.length === 0) return null;
-
     const wrapper = document.createElement('div');
     wrapper.className = 'vote-comments';
 
+    const pv = _votes.filter(v => v.propertyName === propertyName && (v.comment || '').trim());
+
     const title = document.createElement('div');
     title.className = 'vote-comments__title';
-    title.textContent = `💬 室友意見（${pv.length}）`;
+    title.textContent = pv.length > 0 ? `💬 室友意見（${pv.length}）` : '💬 室友意見';
     wrapper.appendChild(title);
+
+    if (pv.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'vote-comments__empty';
+      empty.textContent = '還沒有人留言，當第一個吧！';
+      wrapper.appendChild(empty);
+      return wrapper;
+    }
 
     pv.forEach(v => {
       const item = document.createElement('div');
@@ -268,6 +194,62 @@ const VotePanel = (() => {
     return wrapper;
   }
 
+  /**
+   * 精簡投票摘要（平均分 + 投票者圓點），給表格欄位使用
+   * @param {string} propertyName
+   * @returns {HTMLElement}
+   */
+  function renderSummaryInline(propertyName) {
+    const pv = _votes.filter(v => v.propertyName === propertyName);
+    const summary = document.createElement('div');
+    summary.className = 'vote-summary vote-summary--inline';
+
+    const avg = pv.length > 0
+      ? pv.reduce((s, v) => s + (parseFloat(v.score) || 0), 0) / pv.length
+      : null;
+
+    if (avg !== null) {
+      const avgEl = document.createElement('div');
+      avgEl.className = 'vote-summary__avg';
+      const color = avg >= 4 ? 'var(--success)' : avg >= 3 ? 'var(--warning)' : 'var(--danger)';
+      avgEl.style.color = color;
+      avgEl.textContent = `⭐ ${avg.toFixed(1)}`;
+      summary.appendChild(avgEl);
+    } else {
+      const noneEl = document.createElement('div');
+      noneEl.className = 'vote-summary__none';
+      noneEl.textContent = '尚未投票';
+      summary.appendChild(noneEl);
+    }
+
+    // 投票者圓點
+    const dots = document.createElement('div');
+    dots.className = 'vote-summary__voters';
+
+    const allVoters = new Set();
+    _votes.forEach(v => allVoters.add(v.voterName));
+    if (_voterName) allVoters.add(_voterName);
+
+    allVoters.forEach(name => {
+      const vote = pv.find(v => v.voterName === name);
+      const dot = document.createElement('div');
+      dot.className = `vote-summary__voter-dot ${vote ? 'vote-summary__voter-dot--voted' : 'vote-summary__voter-dot--pending'}`;
+      dot.textContent = name.charAt(0);
+      dot.title = vote ? `${name}：${vote.score} 分` : `${name}：尚未投票`;
+      dots.appendChild(dot);
+    });
+    summary.appendChild(dots);
+
+    return summary;
+  }
+
+  /**
+   * 取得某物件的留言數
+   */
+  function commentCount(propertyName) {
+    return _votes.filter(v => v.propertyName === propertyName && (v.comment || '').trim()).length;
+  }
+
   function _getMyVote(propertyName) {
     const v = _votes.find(v => v.propertyName === propertyName && v.voterName === _voterName);
     return v ? parseInt(v.score) : null;
@@ -278,5 +260,20 @@ const VotePanel = (() => {
     return v ? (v.comment || '') : '';
   }
 
-  return { setConfig, render };
+  // 簡易字串雜湊（產生唯一的 radio group 名稱）
+  function _hash(str) {
+    let h = 0;
+    for (let i = 0; i < (str || '').length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  return {
+    setConfig,
+    setVotes,
+    renderVoteBlock,
+    renderSummaryInline,
+    commentCount,
+  };
 })();

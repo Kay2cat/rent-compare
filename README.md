@@ -136,7 +136,7 @@ https://你的帳號.github.io/rent-compare/?api=SCRIPT_URL&voter=小明
 3. 開啟網頁 → 自動載入所有資料
 4. 用表格的「狀態」下拉選單追蹤進度：候選 → 已約看 → 已看 → 淘汰/簽約
 5. 切換表格 / 地圖 / 比較檢視，點擊標籤篩選
-6. 到投票頁面投票（1-5 分）＋ 留下意見，所有人的留言會顯示成討論串
+6. 在表格中**點任一列展開**，即可打星星投票（1-5 分）＋ 留言，所有人的留言會顯示成討論串
 7. 在比較檢視調整「你在乎什麼」權重，看加權總分排行榜
 8. 達成共識，恭喜找到新家！🎉
 ```
@@ -166,7 +166,7 @@ rent-compare/
 │   ├── map-view.js         # 地圖檢視
 │   ├── chart-view.js       # 雷達圖
 │   ├── tag-system.js       # 標籤系統
-│   ├── vote-panel.js       # 投票面板（投票＋留言）
+│   ├── vote-panel.js       # 投票模組（投票＋留言，整併進表格展開列）
 │   ├── cost-calc.js        # 費用計算
 │   ├── commute.js          # 通勤距離計算
 │   └── quick-add.js        # 快速新增（貼上即解析）
@@ -177,37 +177,14 @@ rent-compare/
 
 ## ❓ FAQ
 
-## ❓ FAQ
-
 **Q：591 抓不到資料怎麼辦？**
-A：由於 591 設有嚴格的防爬蟲機制，Apps Script 伺服器去爬網頁容易被阻擋。有兩個由「你的瀏覽器」代勞的解法：
+A：由於 591 設有嚴格的防爬蟲機制，Apps Script 伺服器去爬網頁容易被阻擋。
 
-#### ✨ 解法 1：網頁內建「➕ 新增物件」（零安裝，最簡單）
+#### ✨ 解法 ：網頁內建「➕ 新增物件」（零安裝，最簡單）
 1. 在 591 物件頁面按 `Ctrl/Cmd + A` 全選 → `Ctrl/Cmd + C` 複製
 2. 回到比較器網頁，點右上角 **「➕ 新增物件」**
 3. 把內容貼進大框框，系統自動解析出名稱、租金、坪數、格局、樓層、地址、押金
 4. 檢查／補齊欄位後點「送出至試算表」，完成！（地址會自動轉成地圖座標）
-
-#### 🛠️ 解法 2：書籤小工具（設定一次，之後一鍵）
-
-#### 🛠️ 書籤小工具安裝教學 (只需設定一次)
-1. 複製下方框框中的**所有代碼**：
-   ```javascript
-   javascript:(function(){let s=localStorage.getItem('rc_bookmarklet_api');if(!s){s=prompt('首次使用，請輸入您的 Google Apps Script Web App URL:\n(例如: https://script.google.com/macros/s/.../exec)');if(!s)return;if(s.indexOf('https://script.google.com/')!==0){alert('無效的 Apps Script 網址！');return}localStorage.setItem('rc_bookmarklet_api',s)}const u=window.location.href;let n='',a='',r=0,z=0,l='',f='',img='';try{const g=p=>{const e=document.querySelector('meta[property="'+p+'"]');if(e)return e.content;return''};n=g('og:title')||document.title;n=n.replace(/\s*[-–—]\s*591.*$/i,'').trim();img=g('og:image');const d=g('og:description')||'';const rm=d.match(/(\d[\d,]*)\s*元/);if(rm)r=parseInt(rm[1].replace(/,/g,''));const zm=d.match(/([\d.]+)\s*坪/);if(zm)z=parseFloat(zm[1]);if(window.location.host.indexOf('591.com.tw')!==-1){const ae=document.querySelector('.address, .detail-map-addr, [class*="address"]');if(ae)a=ae.innerText.replace(/地圖|周邊/g,'').trim();const ds=document.querySelectorAll('.house-pattern span, .house-pattern li, .detail-house-item span, .info-box-content li');ds.forEach(e=>{const t=e.innerText.trim();if(t.indexOf('坪')!==-1&&!z){const m=t.match(/([\d.]+)\s*坪/);if(m)z=parseFloat(m[1])}if(t.indexOf('房')!==-1&&t.indexOf('廳')!==-1&&!l)l=t;if(t.indexOf('層')!==-1||t.indexOf('F')!==-1||t.indexOf('樓')!==-1){if(!f)f=t}});if(!r){const pe=document.querySelector('.house-price, .price, [class*="price"]');if(pe)r=parseInt(pe.innerText.replace(/[^\d]/g,''))}}}catch(e){console.error(e)}if(!confirm('即將同步此物件到您的找房比較器：\n\n🏠 名稱: '+n+'\n💰 租金: '+r+' 元/月\n📍 地址: '+(a||'（未抓到，請手動補）')+'\n📐 坪數: '+(z||0)+' 坪\n🧩 格局: '+(l||'（無）')+'\n🏢 樓層: '+(f||'（無）')+'\n\n是否送出？'))return;const p={action:'addProperty',url:u,name:n,address:a,rent:r,size:z,layout:l,floor:f,images:img};const ld=document.createElement('div');Object.assign(ld.style,{position:'fixed',top:'20px',right:'20px',background:'rgb(74,124,114)',color:'rgb(255,255,255)',padding:'12px 24px',borderRadius:'8px',zIndex:'999999',boxShadow:'0 4px 12px rgba(0,0,0,0.15)',fontFamily:'sans-serif',fontSize:'14px',transition:'all 0.3s ease'});ld.innerText='⏳ 正在同步資料到 Google Sheet...';document.body.appendChild(ld);fetch(s,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(p)}).then(x=>{if(!x.ok)throw new Error('API 錯誤');return x.json()}).then(y=>{if(y.success){ld.style.background='rgb(46,125,50)';ld.innerText='✅ 同步成功！物件已寫入試算表';setTimeout(()=>ld.remove(),2500)}else{throw new Error(y.error||'寫入失敗')}}).catch(e=>{ld.style.background='rgb(198,40,40)';ld.innerText='❌ 同步失敗: '+e.message;const c=confirm('同步失敗，是否需要清除儲存的 API 網址並重新設定？');if(c)localStorage.removeItem('rc_bookmarklet_api');setTimeout(()=>ld.remove(),5000)})();})();
-   ```
-2. 在您的瀏覽器中任意建立一個書籤（例如按 `Cmd+D` 或 `Ctrl+D` 隨便存一個網頁），然後對該書籤按右鍵點擊**「編輯」**（或「修改」）。
-3. 將書籤的**名稱**命名為：`➕ 傳送至比較器`
-4. 將書籤的**網址 (URL)** 欄位清空，並貼上您剛才複製的全部代碼，然後儲存。
-5. 確保您的瀏覽器已顯示「書籤列」（快速鍵 `Cmd+Shift+B` 或 `Ctrl+Shift+B`），這樣方便您隨時點擊。
-
-#### 🚀 如何使用書籤一鍵找房
-1. 用瀏覽器開啟任何一個 591 租屋物件的詳細網頁。
-2. 點擊您瀏覽器書籤列的 **`➕ 傳送至比較器`**。
-3. **首次使用**：會跳出輸入框，請貼入您的 **Google Apps Script Web App URL**（只要輸入一次，瀏覽器就會自動記住）。
-4. 網頁會彈出確認視窗，顯示抓取到的租屋資訊（標題、月租、地址、坪數等），確認無誤後點擊 **「確定」**。
-5. 網頁右上角會顯示「✅ 同步成功！」，此時資料已自動寫入 Google Sheets 並自動計算人均月租和座標，重新整理比較器網頁即可看到新物件！
-
----
 
 **Q：室友可以留言討論嗎？**
 A：可以！在「投票」頁面，每個物件下方都有留言框，投票時一併送出。所有人的留言會顯示成討論串，表格檢視的投票欄也會顯示「💬 N 則意見」（滑鼠移上去可預覽）。

@@ -25,7 +25,7 @@ const QuickAdd = (() => {
 
   function _clearForm() {
     ['qa-paste', 'qa-url', 'qa-name', 'qa-address', 'qa-rent', 'qa-size',
-     'qa-layout', 'qa-floor', 'qa-deposit', 'qa-utilities', 'qa-pros'].forEach(id => {
+     'qa-layout', 'qa-floor', 'qa-deposit', 'qa-utilities', 'qa-features'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -37,7 +37,7 @@ const QuickAdd = (() => {
    * @returns {Object} 解析結果
    */
   function parse(text) {
-    const result = { name: '', address: '', rent: 0, size: 0, layout: '', floor: '', deposit: '', utilities: '', url: '', pros: '' };
+    const result = { name: '', address: '', rent: 0, size: 0, layout: '', floor: '', deposit: '', utilities: '', features: '', url: '' };
     if (!text) return result;
 
     // 網址（若貼文中含網址）
@@ -48,7 +48,7 @@ const QuickAdd = (() => {
     let m = text.match(/(\d{1,3}(?:,\d{3})+|\d{4,6})\s*元\s*\/\s*月/);
     if (!m) m = text.match(/月租金?[:：\s]*(\d{1,3}(?:,\d{3})+|\d{4,6})/);
     if (!m) {
-      // 找出所有「N元」，取第一個 >= 3000 的（過濾掉押金說明中的小數字較難，取第一個合理值）
+      // 找出所有「N元」，取第一個 >= 3000 的合理值
       const all = [...text.matchAll(/(\d{1,3}(?:,\d{3})+|\d{4,6})\s*元/g)];
       const candidate = all.map(x => parseInt(x[1].replace(/,/g, ''))).find(n => n >= 3000 && n <= 300000);
       if (candidate) result.rent = candidate;
@@ -59,12 +59,18 @@ const QuickAdd = (() => {
     m = text.match(/([\d.]+)\s*坪/);
     if (m) result.size = parseFloat(m[1]);
 
-    // 格局 — 3房2廳2衛 / 2房1廳 / 開放式
-    // 使用 matchAll 找出所有符合的格局字串，並取最長的（避免先抓到「3房」而漏掉後面的「3房1廳2衛」）
-    const layoutMatches = [...text.matchAll(/(\d+\s*房(?:\s*\d+\s*廳)?(?:\s*\d+\s*衛)?(?:\s*\d+\s*陽台)?)/g)];
-    if (layoutMatches.length > 0) {
-      const bestMatch = layoutMatches.sort((a, b) => b[0].length - a[0].length)[0];
-      result.layout = bestMatch[1].replace(/\s+/g, '');
+    // 格局 — 分別抓「房／廳／衛」，容許中間有空白、斜線、頓號等分隔
+    // 例：3房1廳2衛、3 房 / 1 廳 / 2 衛、格局：3房2廳2衛
+    const rooms = text.match(/(\d+)\s*房/);
+    if (rooms) {
+      let layout = `${rooms[1]}房`;
+      const halls = text.match(/(\d+)\s*廳/);
+      if (halls) layout += `${halls[1]}廳`;
+      const baths = text.match(/(\d+)\s*衛/);
+      if (baths) layout += `${baths[1]}衛`;
+      result.layout = layout;
+    } else if (/套房/.test(text)) {
+      result.layout = '套房';
     } else if (/開放式/.test(text)) {
       result.layout = '開放式格局';
     }
@@ -95,10 +101,14 @@ const QuickAdd = (() => {
     if (/含管理費/.test(text)) utils.push('含管理費');
     result.utilities = utils.length > 0 ? utils.join('、') : '';
 
-    // 其他特色
-    m = text.match(/其他特色[:：\s]*([^\n]+)/);
+    // 其他特色 — 591 的「其他特色」欄位，常以頓號分隔
+    // 例：其他特色 近捷運、租金補貼、可報稅、近商圈、隨時可遷入、可開伙、可養寵物、可入籍
+    m = text.match(/其他特色[：:\s]*([^\n]+)/);
     if (m) {
-      result.pros = m[1].trim().replace(/[、\s]+/g, ', ');
+      const items = m[1].split(/[、,，\/\s]+/).map(s => s.trim()).filter(Boolean);
+      // 過濾雜訊：保留 2-8 字、不含數字/單位的詞
+      const cleaned = items.filter(s => s.length >= 2 && s.length <= 8 && !/[\d元坪]/.test(s));
+      result.features = cleaned.join('、');
     }
 
     // 名稱 — 取第一行非空且長度合理的文字（去掉網站名稱字尾）
@@ -126,13 +136,15 @@ const QuickAdd = (() => {
     if (parsed.floor)     document.getElementById('qa-floor').value = parsed.floor;
     if (parsed.deposit)   document.getElementById('qa-deposit').value = parsed.deposit;
     if (parsed.utilities) document.getElementById('qa-utilities').value = parsed.utilities;
-    if (parsed.pros)      document.getElementById('qa-pros').value = parsed.pros;
+    const feat = document.getElementById('qa-features');
+    if (feat && parsed.features) feat.value = parsed.features;
   }
 
   /**
    * 送出
    */
   async function _submit() {
+    const featEl = document.getElementById('qa-features');
     const payload = {
       url: document.getElementById('qa-url').value.trim(),
       name: document.getElementById('qa-name').value.trim(),
@@ -143,7 +155,7 @@ const QuickAdd = (() => {
       floor: document.getElementById('qa-floor').value.trim(),
       deposit: document.getElementById('qa-deposit').value.trim(),
       utilities: document.getElementById('qa-utilities').value.trim(),
-      pros: document.getElementById('qa-pros').value.trim(),
+      features: featEl ? featEl.value.trim() : '',
     };
 
     if (!payload.url) {

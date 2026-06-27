@@ -73,9 +73,6 @@
     <button class="view-tab" data-view="chart" id="tab-chart">
       <span class="view-tab__icon">📊</span> 比較檢視
     </button>
-    <button class="view-tab" data-view="vote" id="tab-vote">
-      <span class="view-tab__icon">🗳️</span> 投票
-    </button>
     <label class="hide-eliminated-toggle" title="勾選後，狀態為「淘汰」的物件不會顯示">
       <input type="checkbox" id="toggle-hide-eliminated"> 隱藏已淘汰
     </label>
@@ -106,6 +103,7 @@
         <table class="property-table" id="property-table">
           <thead>
             <tr>
+              <th class="col-toggle"></th>
               <th data-sort="name">名稱 <span class="sort-icon">⇅</span></th>
               <th data-sort="huntStatus">狀態</th>
               <th data-sort="rent">月租金 <span class="sort-icon">⇅</span></th>
@@ -115,7 +113,7 @@
               <th data-sort="floor">樓層</th>
               <th data-sort="commute" id="th-commute">通勤 <span class="sort-icon">⇅</span></th>
               <th>優缺點標籤</th>
-              <th data-sort="avgVote">投票 <span class="sort-icon">⇅</span></th>
+              <th data-sort="avgVote">投票/留言 <span class="sort-icon">⇅</span></th>
             </tr>
           </thead>
           <tbody id="table-body">
@@ -150,13 +148,6 @@
             <!-- 加權排行榜，動態產生 -->
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 投票面板 -->
-    <div class="view-panel" id="panel-vote">
-      <div class="vote-section" id="vote-section">
-        <!-- 動態產生 -->
       </div>
     </div>
 
@@ -235,8 +226,8 @@
           <input type="text" id="qa-utilities" placeholder="含水、含網路">
         </div>
         <div class="modal__field quickadd-grid__full">
-          <label for="qa-pros">特色 / 優缺點</label>
-          <input type="text" id="qa-pros" placeholder="近捷運, 租金補貼, 可報稅">
+          <label for="qa-features">其他特色（自動帶入，可增刪）</label>
+          <input type="text" id="qa-features" placeholder="近捷運、租金補貼、可報稅、可養寵物、可開伙">
         </div>
       </div>
       <div class="modal__actions">
