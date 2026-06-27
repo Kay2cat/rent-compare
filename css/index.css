@@ -376,6 +376,34 @@ body::after {
   font-size: 0.875rem;
 }
 
+/* 欄寬控制 — 避免名稱被長標籤擠成一字一行 */
+.property-table th,
+.property-table td {
+  word-break: keep-all;       /* 中文不要逐字斷行 */
+  overflow-wrap: break-word;
+}
+/* 名稱欄：給足空間，允許在空白/標點換行但不逐字 */
+.property-table .col-name {
+  min-width: 180px;
+  max-width: 240px;
+  white-space: normal;
+  line-height: 1.4;
+}
+/* 標籤欄：限制寬度，讓標籤自己換行而非搶走名稱空間 */
+.property-table .col-tags {
+  max-width: 260px;
+  min-width: 170px;
+}
+/* 數值欄不換行 */
+.property-table td:nth-child(3),
+.property-table td:nth-child(4),
+.property-table td:nth-child(5),
+.property-table td:nth-child(6),
+.property-table td:nth-child(7),
+.property-table td:nth-child(8) {
+  white-space: nowrap;
+}
+
 .property-table thead {
   background: rgba(74, 124, 114, 0.06);
   position: sticky;
@@ -430,6 +458,8 @@ body::after {
 .property-name {
   font-weight: 600;
   color: var(--text-primary);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .property-name a {
@@ -437,6 +467,8 @@ body::after {
   text-decoration: none;
   border-bottom: 1px dashed var(--border-glass-hover);
   transition: border-color var(--transition-fast);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .property-name a:hover {

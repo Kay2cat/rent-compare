@@ -86,6 +86,7 @@ const TableView = (() => {
 
       // === 名稱 ===
       const tdName = document.createElement('td');
+      tdName.className = 'col-name';
       const nameEl = document.createElement('div');
       nameEl.className = 'property-name';
 
@@ -178,6 +179,7 @@ const TableView = (() => {
 
       // === 優缺點標籤 ===
       const tdTags = document.createElement('td');
+      tdTags.className = 'col-tags';
       const tagsContainer = document.createElement('div');
       tagsContainer.className = 'property-tags';
       const allTags = [...TagSystem.parseTags(p.pros), ...TagSystem.parseTags(p.cons)];
